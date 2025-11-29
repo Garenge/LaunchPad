@@ -11,63 +11,140 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var window: NSWindow?
     private var keyEventMonitor: Any?
     private var isLaunchpadVisible = false
-
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        guard let win = NSApp.windows.first else { return }
-        self.window = win
-        showLaunchpad(animated: true)
-        startKeyMonitor()
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        if let monitor = keyEventMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
     }
 
-    func applicationDidBecomeActive(_ notification: Notification) {
-        // 当重新激活 app 时，如果当前没有显示 launchpad 窗口，则再次展示
-        guard let win = window ?? NSApp.windows.first else { return }
-        window = win
-        if !isLaunchpadVisible {
-            showLaunchpad(animated: true)
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // 延迟执行，确保 SwiftUI 窗口完全创建好
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            guard let win = NSApp.windows.first else { return }
+            self.window = win
+            
+            // 立即配置窗口为全屏，不等待动画
+            self.configureLaunchpadWindow(win)
+            
+            // 然后再执行带动画的展示
+            self.showLaunchpad(animated: true)
+            self.startKeyMonitor()
+            self.startNotificationObserver()
         }
+    }
+    
+    /// 监听来自 ContentView 的点击背景退出通知
+    private func startNotificationObserver() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleDismissLaunchpad),
+            name: NSNotification.Name("DismissLaunchpad"),
+            object: nil
+        )
+    }
+    
+    @objc private func handleDismissLaunchpad() {
+        guard let window = self.window else { return }
+        exitFakeFullscreenAndDismiss(window)
+    }
+
+    /// 当用户点击 Dock 图标重新打开应用时，接管系统默认行为，避免额外创建“小窗口”
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            // 没有可见窗口时，重新展示我们的 Launchpad 全屏窗口
+            showLaunchpad(animated: true)
+        } else if let existing = window {
+            // 已经有缓存窗口时，确保它是全屏 Launchpad 状态
+            self.window = existing
+            configureLaunchpadWindow(existing)
+            existing.makeKeyAndOrderFront(nil)
+        }
+
+        // 返回 false 告诉系统：“我已经处理好了”，不要再自动帮我创建新窗口
+        return false
     }
 
     // MARK: - Fake fullscreen (enter)
 
-    /// 配置窗口为“伪全屏 Launchpad”样式（不含动画）
+    /// 配置窗口为"伪全屏 Launchpad"样式（不含动画）
     private func configureLaunchpadWindow(_ window: NSWindow) {
         // Hide macOS menu bar and Dock
         NSMenu.setMenuBarVisible(false)
         NSApp.presentationOptions = [.hideDock, .hideMenuBar]
 
-        // Allow window to appear above other spaces (no new desktop)
+        // Allow window to appear on all spaces (不创建新的桌面 Space)
         window.collectionBehavior = [.fullScreenAuxiliary, .canJoinAllSpaces]
 
         // Remove system fullscreen
         window.collectionBehavior.remove(.fullScreenPrimary)
 
-        // Hide title bar
+        // 配置为无边框、全内容视图的覆盖层窗口，避免看起来像普通"窗口"
+        window.styleMask = [.borderless, .fullSizeContentView]
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
-        window.styleMask.insert(.fullSizeContentView)
-        window.styleMask.remove(.titled)
 
-        // Resize to fill the screen
-        if let screen = NSScreen.main {
-            window.setFrame(screen.frame, display: true, animate: false)
-        }
-
+        // 作为覆盖层存在，但不创建新的 Space
         window.level = .normal
         window.isOpaque = false
         window.hasShadow = false
+        window.backgroundColor = .clear
+
+        // 强制设置为全屏：使用主屏幕的完整 frame
+        if let screen = NSScreen.main {
+            let screenFrame = screen.frame
+            // 确保窗口完全覆盖屏幕，包括菜单栏区域
+            window.setFrame(screenFrame, display: true, animate: false)
+            // 再次强制设置，确保生效
+            DispatchQueue.main.async {
+                window.setFrame(screenFrame, display: true, animate: false)
+            }
+        }
     }
 
     /// 展示 Launchpad 窗口，可选淡入动画
     private func showLaunchpad(animated: Bool) {
-        guard let window = self.window ?? NSApp.windows.first else { return }
-        self.window = window
+        // 统一使用同一个窗口作为 Launchpad 覆盖层
+        var targetWindow: NSWindow?
+
+        if let stored = self.window {
+            targetWindow = stored
+        } else if let main = NSApp.mainWindow {
+            targetWindow = main
+            self.window = main
+        } else if let first = NSApp.windows.first {
+            targetWindow = first
+            self.window = first
+        }
+
+        guard let window = targetWindow else { return }
+
+        // 关闭其它可见窗口，避免出现一个全屏一个小窗口的情况
+        for win in NSApp.windows where win != window && win.isVisible {
+            win.close()
+        }
 
         configureLaunchpadWindow(window)
+        
+        // 在显示前再次强制设置全屏
+        if let screen = NSScreen.main {
+            window.setFrame(screen.frame, display: true, animate: false)
+        }
 
         let presentWindow = {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
+            
+            // 窗口显示后，立即再次强制确保全屏
+            if let screen = NSScreen.main {
+                window.setFrame(screen.frame, display: true, animate: false)
+                // 再延迟一点，确保生效
+                DispatchQueue.main.async {
+                    window.setFrame(screen.frame, display: true, animate: false)
+                }
+            }
         }
 
         if animated {
@@ -77,6 +154,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 context.duration = 0.18
                 context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 window.animator().alphaValue = 1
+            } completionHandler: {
+                // 动画完成后，再次确保窗口是全屏的
+                if let screen = NSScreen.main {
+                    window.setFrame(screen.frame, display: true, animate: false)
+                }
             }
         } else {
             window.alphaValue = 1
@@ -121,7 +203,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// 优雅地退出伪全屏：淡出当前窗口，然后恢复菜单栏 / Dock，并隐藏窗口
     private func exitFakeFullscreenAndDismiss(_ window: NSWindow) {
-        isLaunchpadVisible = false
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.18
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
@@ -131,7 +212,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.exitFakeFullscreen(window)
             window.alphaValue = 1
             window.orderOut(nil)
-            NSApp.hide(nil)
+            self.isLaunchpadVisible = false
         }
     }
 }
