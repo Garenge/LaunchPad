@@ -21,7 +21,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 延迟执行，确保 SwiftUI 窗口完全创建好
-        DispatchQueue.main.async { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             guard let self = self else { return }
             guard let win = NSApp.windows.first else { return }
             self.window = win
@@ -33,6 +33,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.showLaunchpad(animated: true)
             self.startKeyMonitor()
             self.startNotificationObserver()
+            
+            // 动画开始后，再次确保全屏（多次强制设置）
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                guard let self = self, let window = self.window else { return }
+                if let screen = NSScreen.main {
+                    window.setFrame(screen.frame, display: true, animate: false)
+                }
+            }
         }
     }
     
@@ -97,8 +105,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let screenFrame = screen.frame
             // 确保窗口完全覆盖屏幕，包括菜单栏区域
             window.setFrame(screenFrame, display: true, animate: false)
-            // 再次强制设置，确保生效
+            // 禁用窗口大小调整，确保保持全屏
+            window.styleMask.remove(.resizable)
+            // 多次强制设置，确保生效
             DispatchQueue.main.async {
+                window.setFrame(screenFrame, display: true, animate: false)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 window.setFrame(screenFrame, display: true, animate: false)
             }
         }
@@ -158,6 +171,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 // 动画完成后，再次确保窗口是全屏的
                 if let screen = NSScreen.main {
                     window.setFrame(screen.frame, display: true, animate: false)
+                    // 再次延迟确保生效
+                    DispatchQueue.main.async {
+                        window.setFrame(screen.frame, display: true, animate: false)
+                    }
                 }
             }
         } else {
