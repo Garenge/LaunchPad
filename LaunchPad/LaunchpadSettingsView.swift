@@ -65,7 +65,7 @@ struct LaunchpadSettingsView: View {
                 HStack {
                     Text("上下边距")
                     Spacer()
-                    Slider(value: $gridSettings.verticalMargin, in: 20...200, step: 4)
+                    Slider(value: $gridSettings.verticalMargin, in: 80...160, step: 4)
                         .frame(width: 160)
                     Text("\(Int(gridSettings.verticalMargin))")
                         .frame(width: 40, alignment: .trailing)

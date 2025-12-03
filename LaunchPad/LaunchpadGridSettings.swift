@@ -54,7 +54,8 @@ final class LaunchpadGridSettings: ObservableObject {
         self.columnsPerRow = storedColumns > 0 ? storedColumns : 7
         self.rowsPerPage = storedRows > 0 ? storedRows : 5
         self.horizontalMargin = storedHMargin ?? 80
-        self.verticalMargin = storedVMargin ?? 60
+        // 默认上下边距：取新范围 [80, 160] 的中间值 120
+        self.verticalMargin = storedVMargin ?? 120
         self.iconSize = storedIconSize ?? 64
     }
 

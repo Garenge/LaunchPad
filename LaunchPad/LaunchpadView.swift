@@ -15,8 +15,10 @@ struct LaunchpadView: View {
     @State private var currentPage: Int = 0
     @State private var lastScrollTime: Date = .distantPast
 
+    /// 指示器距离屏幕底部的固定间距
     private let indicatorBottomPadding: CGFloat = 32
-    private let indicatorReservedHeight: CGFloat = 72
+    /// 指示器自身的高度（用于给网格预留空间）
+    private let indicatorHeight: CGFloat = 24
 
     // Grid configuration derived from grid settings.
     private var columns: [GridItem] {
@@ -55,6 +57,7 @@ struct LaunchpadView: View {
                         VStack {
                             Spacer()
                             pageControl(totalPages: pages.count, current: safePageIndex)
+                                .frame(height: indicatorHeight)
                                 .padding(.bottom, indicatorBottomPadding)
                         }
                         .padding(.horizontal, gridSettings.horizontalMargin)
@@ -73,24 +76,58 @@ struct LaunchpadView: View {
             let safePageIndex = min(max(currentPage, 0), max(pages.count - 1, 0))
             let pageItems = pages.isEmpty ? [] : pages[safePageIndex]
 
+            // 计算给网格可用的高度：
+            // 总高度 - 顶部间距 - 底部间距(与顶部相同) - 指示器总高度(自身高度 + 底部固定间距)
+            let topMargin = gridSettings.verticalMargin
+            let bottomMargin = gridSettings.verticalMargin
+            let indicatorTotalHeight = indicatorHeight + indicatorBottomPadding
+            let availableGridHeight = max(
+                containerSize.height - topMargin - bottomMargin - indicatorTotalHeight,
+                0
+            )
+
+            // 根据可用高度和每页行数，动态计算行间距：
+            // 每个 AppIconView 的实际高度 = iconSize + spacing(8) + textHeight(约24，2行文字)
+            let rows = max(gridSettings.rowsPerPage, 1)
+            let iconSize = CGFloat(gridSettings.iconSize)
+            let iconSpacing: CGFloat = 8  // VStack spacing
+            let textHeight: CGFloat = 24  // 2行文字的高度（12pt * 2）
+            let itemHeight = iconSize + iconSpacing + textHeight
+            let contentHeight = CGFloat(rows) * itemHeight
+            let gaps = max(rows - 1, 1)
+            let rawRowSpacing = (availableGridHeight - contentHeight) / CGFloat(gaps)
+            // 只设置最小值，不设上限，让网格可以随间距变化自由缩放
+            let rowSpacing = max(8, rawRowSpacing)
             ZStack {
                 VStack(spacing: 0) {
-                    Spacer().frame(height: gridSettings.verticalMargin)
+                    // 顶部到网格的距离
+                    Spacer().frame(height: topMargin)
 
-                    LazyVGrid(columns: columns, alignment: .center, spacing: 32) {
-                        ForEach(Array(pageItems.enumerated()), id: \.offset) { _, item in
-                            switch item {
-                            case .app(let id):
-                                if let app = viewModel.app(for: id) {
-                                    AppIconView(app: app, iconSize: gridSettings.iconSize)
+                    // 网格容器：使用 VStack 确保内容从顶部对齐
+                    VStack(alignment: .center, spacing: 0) {
+                        LazyVGrid(columns: columns, alignment: .center, spacing: rowSpacing) {
+                            ForEach(Array(pageItems.enumerated()), id: \.offset) { _, item in
+                                switch item {
+                                case .app(let id):
+                                    if let app = viewModel.app(for: id) {
+                                        AppIconView(app: app, iconSize: gridSettings.iconSize)
+                                    }
+                                case .folder(let folder):
+                                    FolderIconPlaceholderView(folder: folder, iconSize: gridSettings.iconSize)
                                 }
-                            case .folder(let folder):
-                                FolderIconPlaceholderView(folder: folder, iconSize: gridSettings.iconSize)
                             }
                         }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: availableGridHeight, alignment: .top)
 
-                    Spacer().frame(height: indicatorReservedHeight + gridSettings.verticalMargin)
+                    // 使用 Spacer 占据剩余空间，确保网格从顶部显示（不足一页时）
+                    Spacer(minLength: 0)
+
+                    // 网格到底部指示器区域顶部的距离，与顶部一致
+                    Spacer().frame(height: bottomMargin)
+
+                    // 为底部指示器预留固定区域高度（指示器本身高度 + 固定底部间距）
+                    Spacer().frame(height: indicatorHeight + indicatorBottomPadding)
                 }
 
                 // 捕获滚轮事件用于翻页
