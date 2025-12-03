@@ -7,7 +7,7 @@
 
 import AppKit
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var window: NSWindow?
     private var keyEventMonitor: Any?
     private var isLaunchpadVisible = false
@@ -20,28 +20,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // 延迟执行，确保 SwiftUI 窗口完全创建好
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            guard let self = self else { return }
-            guard let win = NSApp.windows.first else { return }
-            self.window = win
-            
-            // 立即配置窗口为全屏，不等待动画
-            self.configureLaunchpadWindow(win)
-            
-            // 然后再执行带动画的展示
-            self.showLaunchpad(animated: true)
-            self.startKeyMonitor()
-            self.startNotificationObserver()
-            
-            // 动画开始后，再次确保全屏（多次强制设置）
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                guard let self = self, let window = self.window else { return }
-                if let screen = NSScreen.main {
-                    window.setFrame(screen.frame, display: true, animate: false)
-                }
-            }
-        }
+        // 使用窗口生命周期回调替代固定延迟：
+        // 监听第一个主窗口出现的时机，再进行全屏配置和动画
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleFirstWindowDidBecomeMain(_:)),
+            name: NSWindow.didBecomeMainNotification,
+            object: nil
+        )
+    }
+
+    /// 第一个 SwiftUI 窗口真正成为主窗口时的回调
+    @objc private func handleFirstWindowDidBecomeMain(_ notification: Notification) {
+        guard let win = notification.object as? NSWindow else { return }
+
+        // 只对第一次出现的窗口做 Launchpad 配置，避免重复处理
+        if self.window != nil { return }
+
+        self.window = win
+        win.delegate = self
+
+        // 立即配置为 Launchpad 伪全屏
+        configureLaunchpadWindow(win)
+
+        // 然后再执行带动画的展示
+        showLaunchpad(animated: true)
+        startKeyMonitor()
+        startNotificationObserver()
     }
     
     /// 监听来自 ContentView 的点击背景退出通知
@@ -227,7 +232,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } completionHandler: { [weak self] in
             guard let self = self else { return }
             self.exitFakeFullscreen(window)
-            window.alphaValue = 1
+            window.alphaValue = 0
             window.orderOut(nil)
             self.isLaunchpadVisible = false
         }
