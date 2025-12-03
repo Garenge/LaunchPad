@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct ContentView: View {
+    @StateObject private var viewModel = LaunchpadViewModel()
+
     var body: some View {
         ZStack {
             // 背景层：毛玻璃 + 轻微遮罩，点击背景可退出（类似系统 Launchpad）
@@ -15,7 +17,7 @@ struct ContentView: View {
                 Rectangle()
                     .fill(.ultraThinMaterial)
                     .ignoresSafeArea()
-                
+
                 Color.black.opacity(0.03)
                     .ignoresSafeArea()
             }
@@ -24,11 +26,9 @@ struct ContentView: View {
                 // 点击背景时，发送通知退出 Launchpad（和 Esc 效果一样）
                 NotificationCenter.default.post(name: NSNotification.Name("DismissLaunchpad"), object: nil)
             }
-            
-            // 内容层
-            Text("Fake Fullscreen Window")
-                .foregroundColor(.white)
-                .font(.largeTitle)
+
+            // 内容层：第一版 Launchpad 图标网格
+            LaunchpadView(viewModel: viewModel)
         }
     }
 }
@@ -36,3 +36,4 @@ struct ContentView: View {
 #Preview {
     ContentView()
 }
+

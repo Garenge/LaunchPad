@@ -38,12 +38,17 @@
 ## 当前进度概览
 
 - **阶段 0：基础工程 & 伪全屏 Launchpad 容器**：进行中（0.2 已实现基本 fake fullscreen + 动画）。
-- **阶段 1：基础 UI – 单页图标网格**：规划中。
+- **阶段 1：基础 UI – 单页图标网格**：进行中（已有真实 App 数据 + 第一版网格）。
 - **阶段 2：分页和页面指示器**：规划中。
 - **阶段 3：搜索与过滤**：规划中。
 - **阶段 4：编辑模式（图标抖动、删除按钮）**：规划中。
 - **阶段 5：拖拽排序与文件夹**：规划中。
 - **阶段 6：视觉优化与性能调优**：规划中。
+
+**短期优先方向（Next steps，待选择）**：
+- A：继续打磨“单页网格”的视觉细节，使之更接近系统 Launchpad。
+- B：基于现有 `LaunchpadLayout` 补上分页与底部页面指示器。
+- C：加入顶部搜索栏与基础过滤能力。
 
 ---
 
@@ -63,22 +68,24 @@
 
 ---
 
-## 关键文件与目录（规划）
+## 关键文件与目录（规划 & 当前实现）
 
 - **`LaunchPadApp.swift`**：SwiftUI 入口，负责创建主场景。
 - **`AppDelegate.swift`**：与 AppKit 桥接，负责：
   - 管理 `NSWindow` 生命周期、伪全屏配置。
   - 处理键盘事件（Esc / Space 等）。
   - 处理应用重新激活、Dock 图标点击等系统级回调。
-- **`ContentView.swift` / `LaunchpadView.swift`（规划）**：
-  - SwiftUI 主界面，包含图标网格、分页、搜索栏等。
-- **`Models/`（规划）**：
-  - `AppItem`、`FolderItem` 等数据模型。
-- **`ViewModels/`（规划）**：
-  - `LaunchpadViewModel` 等状态管理类。
-- **`Services/`（规划）**：
-  - 读取系统已安装 App 列表。
-  - 持久化用户的图标布局、文件夹结构等。
+- **`ContentView.swift` / `LaunchpadView.swift`**：
+  - SwiftUI 主界面：`ContentView` 提供背景与退出手势，`LaunchpadView` 负责图标网格展示（当前实现了单页网格雏形）。
+- **`Models.swift`**：
+  - `AppItem`、`FolderItem`、`LaunchpadLayout` 等核心数据模型。
+- **`DataSources.swift`**：
+  - 数据源协议 `AppCatalogDataSource` / `LaunchpadLayoutDataSource`。
+  - 方案一实现：`FileSystemAppCatalogDataSource`（扫描应用）、`LocalJSONLayoutDataSource`（本地 JSON 布局）。
+- **`LaunchpadRepository.swift`**：
+  - 上层使用的统一入口，组合 app 列表与布局数据源。
+- **`LaunchpadViewModel.swift`**：
+  - SwiftUI 使用的视图模型，桥接 `LaunchpadRepository` 与 `LaunchpadView`。
 
 ---
 
@@ -101,13 +108,13 @@
 
 ### 阶段 1：基础 UI – 单页图标网格
 
-- **1.1 图标数据模型**
-  - 定义 `AppItem` 模型（名称、图标、Bundle Identifier、分类、是否系统 App 等）。
-  - 提供一组假数据用于开发和预览。
-- **1.2 单页图标网格布局**
-  - 使用 SwiftUI 的 `LazyVGrid` 或自定义网格，实现类似 Launchpad 的图标排列。
+- **1.1 图标数据模型（进行中）**
+  - 定义 `AppItem` 模型（名称、图标、Bundle Identifier、是否系统 App 等）并已实现。
+  - 后续可扩展分类、标签等字段。
+- **1.2 单页图标网格布局（进行中）**
+  - 使用 SwiftUI 的 `LazyVGrid` 实现类似 Launchpad 的图标排列（当前已有基础网格雏形）。
   - 处理图标尺寸、行列间距、行数/列数配置。
-  - 支持简单的 hover/点击高亮效果。
+  - 支持简单的 hover/点击高亮效果（规划中）。
 - **1.3 进入/退出 Launchpad 的基础动画**
   - 进入时整体淡入（已在 AppKit 层做窗口淡入，可以同步增加 SwiftUI 内容的小缩放/透明度过渡）。
   - 退出时整体淡出。
