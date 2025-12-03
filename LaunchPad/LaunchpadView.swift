@@ -13,6 +13,7 @@ struct LaunchpadView: View {
     @ObservedObject private var gridSettings = LaunchpadGridSettings.shared
 
     @State private var currentPage: Int = 0
+    @State private var lastScrollTime: Date = .distantPast
 
     // Grid configuration derived from grid settings.
     private var columns: [GridItem] {
@@ -25,7 +26,8 @@ struct LaunchpadView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            Group {
+            ZStack {
+                // 中心网格
                 if viewModel.isLoading {
                     ProgressView()
                         .progressViewStyle(.circular)
@@ -35,16 +37,33 @@ struct LaunchpadView: View {
                         .multilineTextAlignment(.center)
                         .padding()
                 } else {
-                    content(in: proxy.size)
+                    gridAndPaging(in: proxy.size)
+                        .padding(.horizontal, gridSettings.horizontalMargin)
+                        .padding(.vertical, gridSettings.verticalMargin)
+                }
+
+                // 固定在底部的页面指示器
+                if let layout = viewModel.layout {
+                    let allItems = layout.pages.flatMap { $0.items }
+                    let itemsPerPage = max(1, gridSettings.columnsPerRow * gridSettings.rowsPerPage)
+                    let pages = paginate(items: allItems, itemsPerPage: itemsPerPage)
+                    let safePageIndex = min(max(currentPage, 0), max(pages.count - 1, 0))
+
+                    if pages.count > 1 {
+                        VStack {
+                            Spacer()
+                            pageControl(totalPages: pages.count, current: safePageIndex)
+                                .padding(.bottom, gridSettings.verticalMargin / 2)
+                        }
+                        .padding(.horizontal, gridSettings.horizontalMargin)
+                    }
                 }
             }
-            .padding(.horizontal, 80)
-            .padding(.vertical, 60)
         }
     }
 
     @ViewBuilder
-    private func content(in containerSize: CGSize) -> some View {
+    private func gridAndPaging(in containerSize: CGSize) -> some View {
         if let layout = viewModel.layout {
             let allItems = layout.pages.flatMap { $0.items }
             let itemsPerPage = max(1, gridSettings.columnsPerRow * gridSettings.rowsPerPage)
@@ -52,26 +71,33 @@ struct LaunchpadView: View {
             let safePageIndex = min(max(currentPage, 0), max(pages.count - 1, 0))
             let pageItems = pages.isEmpty ? [] : pages[safePageIndex]
 
-            VStack {
-                LazyVGrid(columns: columns, alignment: .center, spacing: 32) {
-                    ForEach(Array(pageItems.enumerated()), id: \.offset) { _, item in
-                        switch item {
-                        case .app(let id):
-                            if let app = viewModel.app(for: id) {
-                                AppIconView(app: app)
+            ZStack {
+                VStack {
+                    Spacer()
+
+                    LazyVGrid(columns: columns, alignment: .center, spacing: 32) {
+                        ForEach(Array(pageItems.enumerated()), id: \.offset) { _, item in
+                            switch item {
+                            case .app(let id):
+                                if let app = viewModel.app(for: id) {
+                                    AppIconView(app: app, iconSize: gridSettings.iconSize)
+                                }
+                            case .folder(let folder):
+                                FolderIconPlaceholderView(folder: folder, iconSize: gridSettings.iconSize)
                             }
-                        case .folder(let folder):
-                            FolderIconPlaceholderView(folder: folder)
                         }
                     }
+
+                    Spacer()
                 }
 
-                if pages.count > 1 {
-                    pageControl(totalPages: pages.count, current: safePageIndex)
-                        .padding(.top, 24)
+                // 捕获滚轮事件用于翻页
+                ScrollPagingCaptureView { deltaY in
+                    handleScroll(deltaY: deltaY, totalPages: pages.count)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             Text("No layout available")
                 .foregroundColor(.secondary)
@@ -79,6 +105,24 @@ struct LaunchpadView: View {
     }
 
     // MARK: - Pagination helpers
+
+    private func handleScroll(deltaY: CGFloat, totalPages: Int) {
+        // Debug log for scroll events
+        print("LaunchpadView scroll deltaY =", deltaY, "currentPage =", currentPage, "totalPages =", totalPages)
+
+        // 简单节流，避免一次滚动触发多次翻页
+        let now = Date()
+        guard now.timeIntervalSince(lastScrollTime) > 0.15 else { return }
+        lastScrollTime = now
+
+        guard totalPages > 1 else { return }
+
+        if deltaY < 0, currentPage < totalPages - 1 {
+            currentPage += 1
+        } else if deltaY > 0, currentPage > 0 {
+            currentPage -= 1
+        }
+    }
 
     private func paginate(items: [LaunchpadItem], itemsPerPage: Int) -> [[LaunchpadItem]] {
         guard itemsPerPage > 0 else { return [items] }
@@ -139,14 +183,15 @@ struct LaunchpadView: View {
 
 private struct AppIconView: View {
     let app: AppItem
+    let iconSize: Double
 
     var body: some View {
         VStack(spacing: 8) {
             iconImage
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(width: 64, height: 64)
-                .cornerRadius(14)
+                .frame(width: iconSize, height: iconSize)
+                .cornerRadius(iconSize * 0.22)
                 .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 3)
 
             Text(app.name)
@@ -167,12 +212,13 @@ private struct AppIconView: View {
 /// Placeholder for folder icon – later can be replaced with real folder preview.
 private struct FolderIconPlaceholderView: View {
     let folder: FolderItem
+    let iconSize: Double
 
     var body: some View {
         VStack(spacing: 8) {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color.white.opacity(0.2))
-                .frame(width: 64, height: 64)
+                .frame(width: iconSize, height: iconSize)
                 .overlay(
                     Image(systemName: "folder.fill")
                         .resizable()
