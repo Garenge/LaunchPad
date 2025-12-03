@@ -15,6 +15,9 @@ struct LaunchpadView: View {
     @State private var currentPage: Int = 0
     @State private var lastScrollTime: Date = .distantPast
 
+    private let indicatorBottomPadding: CGFloat = 32
+    private let indicatorReservedHeight: CGFloat = 72
+
     // Grid configuration derived from grid settings.
     private var columns: [GridItem] {
         let count = max(gridSettings.columnsPerRow, 1)
@@ -39,7 +42,6 @@ struct LaunchpadView: View {
                 } else {
                     gridAndPaging(in: proxy.size)
                         .padding(.horizontal, gridSettings.horizontalMargin)
-                        .padding(.vertical, gridSettings.verticalMargin)
                 }
 
                 // 固定在底部的页面指示器
@@ -53,7 +55,7 @@ struct LaunchpadView: View {
                         VStack {
                             Spacer()
                             pageControl(totalPages: pages.count, current: safePageIndex)
-                                .padding(.bottom, gridSettings.verticalMargin / 2)
+                                .padding(.bottom, indicatorBottomPadding)
                         }
                         .padding(.horizontal, gridSettings.horizontalMargin)
                     }
@@ -72,8 +74,8 @@ struct LaunchpadView: View {
             let pageItems = pages.isEmpty ? [] : pages[safePageIndex]
 
             ZStack {
-                VStack {
-                    Spacer()
+                VStack(spacing: 0) {
+                    Spacer().frame(height: gridSettings.verticalMargin)
 
                     LazyVGrid(columns: columns, alignment: .center, spacing: 32) {
                         ForEach(Array(pageItems.enumerated()), id: \.offset) { _, item in
@@ -88,7 +90,7 @@ struct LaunchpadView: View {
                         }
                     }
 
-                    Spacer()
+                    Spacer().frame(height: indicatorReservedHeight + gridSettings.verticalMargin)
                 }
 
                 // 捕获滚轮事件用于翻页
@@ -107,9 +109,6 @@ struct LaunchpadView: View {
     // MARK: - Pagination helpers
 
     private func handleScroll(deltaY: CGFloat, totalPages: Int) {
-        // Debug log for scroll events
-        print("LaunchpadView scroll deltaY =", deltaY, "currentPage =", currentPage, "totalPages =", totalPages)
-
         // 简单节流，避免一次滚动触发多次翻页
         let now = Date()
         guard now.timeIntervalSince(lastScrollTime) > 0.15 else { return }
@@ -117,10 +116,16 @@ struct LaunchpadView: View {
 
         guard totalPages > 1 else { return }
 
+        let oldPage = currentPage
+
         if deltaY < 0, currentPage < totalPages - 1 {
             currentPage += 1
         } else if deltaY > 0, currentPage > 0 {
             currentPage -= 1
+        }
+
+        if currentPage != oldPage {
+            print("Launchpad currentPage =", currentPage, "/", totalPages)
         }
     }
 

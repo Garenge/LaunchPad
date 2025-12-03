@@ -183,6 +183,21 @@
 
 ---
 
+## 设置面板设计（预览版）
+
+- **入口**：
+  - 在 Launchpad 空白区域右键（`contextMenu`）选择“打开 Launchpad 设置…”，弹出一个设置窗口（当前实现为 SwiftUI `sheet`）。
+- **当前支持的设置项（实时生效）**：
+  - 每行图标数（列数）：通过 `Stepper` 控制 `columnsPerRow`。
+  - 每页行数：通过 `Stepper` 控制 `rowsPerPage`。
+  - 上下 / 左右边距：通过 `Slider` 控制 `verticalMargin` / `horizontalMargin`。
+- **状态与持久化**：
+  - 所有布局相关配置集中在 `LaunchpadGridSettings` 中（`ObservableObject` + `UserDefaults` 持久化）。
+  - 设置修改后立即刷新 Launchpad 网格，不需要重启应用。
+  - 未来可在此面板继续扩展图标大小、分页动画、指示器样式等高级选项。
+
+---
+
 ## 技术决策备忘
 
 - **为何使用“伪全屏”而非系统原生全屏**

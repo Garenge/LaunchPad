@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var viewModel = LaunchpadViewModel()
+    @State private var isShowingSettings = false
 
     var body: some View {
         ZStack {
@@ -26,9 +27,17 @@ struct ContentView: View {
                 // 点击背景时，发送通知退出 Launchpad（和 Esc 效果一样）
                 NotificationCenter.default.post(name: NSNotification.Name("DismissLaunchpad"), object: nil)
             }
+            .contextMenu {
+                Button("打开 Launchpad 设置…") {
+                    isShowingSettings = true
+                }
+            }
 
             // 内容层：第一版 Launchpad 图标网格
             LaunchpadView(viewModel: viewModel)
+        }
+        .sheet(isPresented: $isShowingSettings) {
+            LaunchpadSettingsView()
         }
     }
 }
