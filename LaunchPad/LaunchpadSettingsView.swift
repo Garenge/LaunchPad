@@ -65,9 +65,31 @@ struct LaunchpadSettingsView: View {
                 HStack {
                     Text("上下边距")
                     Spacer()
-                    Slider(value: $gridSettings.verticalMargin, in: 80...160, step: 4)
+                    Slider(value: $gridSettings.verticalMargin, in: 80...260, step: 4)
                         .frame(width: 160)
                     Text("\(Int(gridSettings.verticalMargin))")
+                        .frame(width: 40, alignment: .trailing)
+                }
+            }
+
+            Divider()
+
+            Group {
+                HStack {
+                    Text("图标大小")
+                    Spacer()
+                    Slider(value: $gridSettings.iconSize, in: 32...128, step: 2)
+                        .frame(width: 160)
+                    Text("\(Int(gridSettings.iconSize))")
+                        .frame(width: 40, alignment: .trailing)
+                }
+
+                HStack {
+                    Text("字体大小")
+                    Spacer()
+                    Slider(value: $gridSettings.appNameFontSize, in: 8...20, step: 0.5)
+                        .frame(width: 160)
+                    Text("\(Int(gridSettings.appNameFontSize))")
                         .frame(width: 40, alignment: .trailing)
                 }
             }
@@ -79,7 +101,7 @@ struct LaunchpadSettingsView: View {
                 .foregroundColor(.secondary)
         }
         .padding(20)
-        .frame(width: 380, height: 260)
+        .frame(width: 380, height: 340)
     }
 }
 

@@ -108,12 +108,12 @@ struct LaunchpadView: View {
                         LazyVGrid(columns: columns, alignment: .center, spacing: rowSpacing) {
                             ForEach(Array(pageItems.enumerated()), id: \.offset) { _, item in
                                 switch item {
-                                case .app(let id):
-                                    if let app = viewModel.app(for: id) {
-                                        AppIconView(app: app, iconSize: gridSettings.iconSize)
-                                    }
-                                case .folder(let folder):
-                                    FolderIconPlaceholderView(folder: folder, iconSize: gridSettings.iconSize)
+                            case .app(let id):
+                                if let app = viewModel.app(for: id) {
+                                    AppIconView(app: app, iconSize: gridSettings.iconSize, fontSize: gridSettings.appNameFontSize)
+                                }
+                            case .folder(let folder):
+                                FolderIconPlaceholderView(folder: folder, iconSize: gridSettings.iconSize, fontSize: gridSettings.appNameFontSize)
                                 }
                             }
                         }
@@ -226,6 +226,7 @@ struct LaunchpadView: View {
 private struct AppIconView: View {
     let app: AppItem
     let iconSize: Double
+    let fontSize: Double
 
     var body: some View {
         VStack(spacing: 8) {
@@ -237,7 +238,7 @@ private struct AppIconView: View {
                 .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 3)
 
             Text(app.name)
-                .font(.system(size: 12))
+                .font(.system(size: fontSize))
                 .foregroundColor(.white)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
@@ -255,6 +256,7 @@ private struct AppIconView: View {
 private struct FolderIconPlaceholderView: View {
     let folder: FolderItem
     let iconSize: Double
+    let fontSize: Double
 
     var body: some View {
         VStack(spacing: 8) {
@@ -271,7 +273,7 @@ private struct FolderIconPlaceholderView: View {
                 .shadow(color: Color.black.opacity(0.25), radius: 6, x: 0, y: 3)
 
             Text(folder.name)
-                .font(.system(size: 12))
+                .font(.system(size: fontSize))
                 .foregroundColor(.white)
                 .lineLimit(1)
                 .multilineTextAlignment(.center)

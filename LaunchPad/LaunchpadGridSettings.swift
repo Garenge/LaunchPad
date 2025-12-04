@@ -36,11 +36,17 @@ final class LaunchpadGridSettings: ObservableObject {
         didSet { persist() }
     }
 
+    /// App name font size in points.
+    @Published var appNameFontSize: Double {
+        didSet { persist() }
+    }
+
     private let columnsKey = "LaunchpadGridSettings.columnsPerRow"
     private let rowsKey = "LaunchpadGridSettings.rowsPerPage"
     private let hMarginKey = "LaunchpadGridSettings.horizontalMargin"
     private let vMarginKey = "LaunchpadGridSettings.verticalMargin"
     private let iconSizeKey = "LaunchpadGridSettings.iconSize"
+    private let appNameFontSizeKey = "LaunchpadGridSettings.appNameFontSize"
 
     private init() {
         let defaults = UserDefaults.standard
@@ -49,14 +55,15 @@ final class LaunchpadGridSettings: ObservableObject {
         let storedHMargin = defaults.object(forKey: hMarginKey) as? Double
         let storedVMargin = defaults.object(forKey: vMarginKey) as? Double
         let storedIconSize = defaults.object(forKey: iconSizeKey) as? Double
+        let storedFontSize = defaults.object(forKey: appNameFontSizeKey) as? Double
 
         // Provide sensible defaults if nothing stored yet.
         self.columnsPerRow = storedColumns > 0 ? storedColumns : 7
         self.rowsPerPage = storedRows > 0 ? storedRows : 5
-        self.horizontalMargin = storedHMargin ?? 80
-        // 默认上下边距：取新范围 [80, 160] 的中间值 120
-        self.verticalMargin = storedVMargin ?? 120
-        self.iconSize = storedIconSize ?? 64
+        self.horizontalMargin = storedHMargin ?? 270
+        self.verticalMargin = storedVMargin ?? 160
+        self.iconSize = storedIconSize ?? 108
+        self.appNameFontSize = storedFontSize ?? 13
     }
 
     private func persist() {
@@ -66,6 +73,7 @@ final class LaunchpadGridSettings: ObservableObject {
         defaults.set(horizontalMargin, forKey: hMarginKey)
         defaults.set(verticalMargin, forKey: vMarginKey)
         defaults.set(iconSize, forKey: iconSizeKey)
+        defaults.set(appNameFontSize, forKey: appNameFontSizeKey)
     }
 }
 
