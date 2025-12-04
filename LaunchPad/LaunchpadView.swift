@@ -14,6 +14,7 @@ struct LaunchpadView: View {
 
     @State private var currentPage: Int = 0
     @State private var lastScrollTime: Date = .distantPast
+    @State private var lastSwipeTime: Date = .distantPast
 
     /// 指示器距离屏幕底部的固定间距
     private let indicatorBottomPadding: CGFloat = 32
@@ -135,6 +136,12 @@ struct LaunchpadView: View {
                     handleScroll(deltaY: deltaY, totalPages: pages.count)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                // 捕获鼠标轻扫（拖拽）事件用于翻页
+                SwipePagingCaptureView { direction in
+                    handleSwipe(direction: direction, totalPages: pages.count)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -163,6 +170,34 @@ struct LaunchpadView: View {
 
         if currentPage != oldPage {
             print("Launchpad currentPage =", currentPage, "/", totalPages)
+        }
+    }
+
+    private func handleSwipe(direction: SwipePagingCaptureView.SwipeDirection, totalPages: Int) {
+        // 简单节流，避免一次拖拽触发多次翻页
+        let now = Date()
+        guard now.timeIntervalSince(lastSwipeTime) > 0.3 else { return }
+        lastSwipeTime = now
+
+        guard totalPages > 1 else { return }
+
+        let oldPage = currentPage
+
+        switch direction {
+        case .left:
+            // 向左轻扫 = 下一页
+            if currentPage < totalPages - 1 {
+                currentPage += 1
+            }
+        case .right:
+            // 向右轻扫 = 上一页
+            if currentPage > 0 {
+                currentPage -= 1
+            }
+        }
+
+        if currentPage != oldPage {
+            print("Launchpad swipe to page =", currentPage, "/", totalPages)
         }
     }
 
