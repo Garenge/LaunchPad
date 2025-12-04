@@ -328,6 +328,7 @@ struct LaunchpadView: View {
             pageOffset = currentOffset - targetOffset
             
             // Update currentPage
+            isDragging = false
             currentPage = targetPage
             print("Launchpad drag to page =", currentPage, "/", totalPages)
             
@@ -339,13 +340,12 @@ struct LaunchpadView: View {
             }
         } else {
             // Reset to current page with smooth bounce-back animation
+            isDragging = false
             withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                 dragOffset = 0
                 pageOffset = 0
             }
         }
-
-        isDragging = false
     }
 
     private func paginate(items: [LaunchpadItem], itemsPerPage: Int) -> [[LaunchpadItem]] {

@@ -43,8 +43,8 @@ private final class SwipeCaptureNSView: NSView {
     private var lastDragLocation: NSPoint?
     private var hasMoved: Bool = false  // Track if mouse has moved significantly
     private let minDragDistance: CGFloat = 5  // Minimum distance to consider it a drag (not a click)
-    private let swipeDistanceThreshold: CGFloat = 80 // Minimum drag distance to trigger page change
-    private let swipeVelocityThreshold: CGFloat = 400 // Minimum velocity (points per second) to trigger page change
+    private let swipeDistanceThreshold: CGFloat = 120 // Minimum drag distance to trigger page change
+    private let swipeVelocityThreshold: CGFloat = 600 // Minimum velocity (points per second) to trigger page change
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
