@@ -14,7 +14,9 @@ struct LaunchpadView: View {
 
     @State private var currentPage: Int = 0
     @State private var lastScrollTime: Date = .distantPast
-    @State private var lastSwipeTime: Date = .distantPast
+    @State private var dragOffset: CGFloat = 0  // Real-time drag offset for visual feedback
+    @State private var isDragging: Bool = false
+    @State private var pageOffset: CGFloat = 0  // Base offset for page position
 
     /// 指示器距离屏幕底部的固定间距
     private let indicatorBottomPadding: CGFloat = 32
@@ -66,6 +68,26 @@ struct LaunchpadView: View {
                 }
             }
         }
+        .onAppear {
+            // Reset all animation-related state when view appears
+            // This ensures clean state when app reopens
+            resetAnimationState()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ResetLaunchpadView"))) { _ in
+            // Reset state when explicitly requested (e.g., when app reopens)
+            resetAnimationState()
+        }
+    }
+    
+    // MARK: - State Reset
+    
+    private func resetAnimationState() {
+        // Reset all animation-related state to initial values
+        dragOffset = 0
+        pageOffset = 0
+        isDragging = false
+        lastScrollTime = .distantPast
+        // Note: currentPage is intentionally not reset to preserve user's position
     }
 
     @ViewBuilder
@@ -74,8 +96,6 @@ struct LaunchpadView: View {
             let allItems = layout.pages.flatMap { $0.items }
             let itemsPerPage = max(1, gridSettings.columnsPerRow * gridSettings.rowsPerPage)
             let pages = paginate(items: allItems, itemsPerPage: itemsPerPage)
-            let safePageIndex = min(max(currentPage, 0), max(pages.count - 1, 0))
-            let pageItems = pages.isEmpty ? [] : pages[safePageIndex]
 
             // 计算给网格可用的高度：
             // 总高度 - 顶部间距 - 底部间距(与顶部相同) - 指示器总高度(自身高度 + 底部固定间距)
@@ -99,29 +119,42 @@ struct LaunchpadView: View {
             let rawRowSpacing = (availableGridHeight - contentHeight) / CGFloat(gaps)
             // 只设置最小值，不设上限，让网格可以随间距变化自由缩放
             let rowSpacing = max(8, rawRowSpacing)
+            let pageWidth = containerSize.width - (gridSettings.horizontalMargin * 2)
+            
             ZStack {
+                // CollectionView 风格：水平排列多个页面
                 VStack(spacing: 0) {
                     // 顶部到网格的距离
                     Spacer().frame(height: topMargin)
 
-                    // 网格容器：使用 VStack 确保内容从顶部对齐
-                    VStack(alignment: .center, spacing: 0) {
-                        LazyVGrid(columns: columns, alignment: .center, spacing: rowSpacing) {
-                            ForEach(Array(pageItems.enumerated()), id: \.offset) { _, item in
-                                switch item {
-                            case .app(let id):
-                                if let app = viewModel.app(for: id) {
-                                    AppIconView(app: app, iconSize: gridSettings.iconSize, fontSize: gridSettings.appNameFontSize)
-                                }
-                            case .folder(let folder):
-                                FolderIconPlaceholderView(folder: folder, iconSize: gridSettings.iconSize, fontSize: gridSettings.appNameFontSize)
-                                }
+                    // 页面容器：使用 HStack 水平排列所有页面
+                    GeometryReader { geometry in
+                        HStack(spacing: 0) {
+                            ForEach(0..<pages.count, id: \.self) { pageIndex in
+                                // 每个页面都是一个独立的网格
+                                pageView(
+                                    items: pages[pageIndex],
+                                    columns: columns,
+                                    rowSpacing: rowSpacing,
+                                    availableHeight: availableGridHeight
+                                )
+                                .frame(width: pageWidth, height: availableGridHeight, alignment: .top)
+                            }
+                        }
+                        .offset(x: -(CGFloat(currentPage) * pageWidth) + dragOffset + pageOffset)
+                        // Use transaction to control animation behavior
+                        .transaction { transaction in
+                            if isDragging {
+                                transaction.animation = nil
+                            } else {
+                                transaction.animation = .spring(response: 0.4, dampingFraction: 0.85)
                             }
                         }
                     }
-                    .frame(maxWidth: .infinity, maxHeight: availableGridHeight, alignment: .top)
+                    .frame(height: availableGridHeight)
+                    .clipped()  // 裁剪超出部分，只显示当前可见的页面
 
-                    // 使用 Spacer 占据剩余空间，确保网格从顶部显示（不足一页时）
+                    // 使用 Spacer 占据剩余空间
                     Spacer(minLength: 0)
 
                     // 网格到底部指示器区域顶部的距离，与顶部一致
@@ -137,10 +170,16 @@ struct LaunchpadView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                // 捕获鼠标轻扫（拖拽）事件用于翻页
-                SwipePagingCaptureView { direction in
-                    handleSwipe(direction: direction, totalPages: pages.count)
-                }
+                // 捕获鼠标拖拽事件用于翻页（带视觉反馈）
+                SwipePagingCaptureView(
+                    onDragChanged: { offset in
+                        dragOffset = offset
+                        isDragging = true
+                    },
+                    onDragEnded: { direction in
+                        handleDragEnd(direction: direction, totalPages: pages.count, pageWidth: pageWidth)
+                    }
+                )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -148,6 +187,32 @@ struct LaunchpadView: View {
             Text("No layout available")
                 .foregroundColor(.secondary)
         }
+    }
+
+    // MARK: - Page View
+    
+    @ViewBuilder
+    private func pageView(
+        items: [LaunchpadItem],
+        columns: [GridItem],
+        rowSpacing: CGFloat,
+        availableHeight: CGFloat
+    ) -> some View {
+        VStack(alignment: .center, spacing: 0) {
+            LazyVGrid(columns: columns, alignment: .center, spacing: rowSpacing) {
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    switch item {
+                    case .app(let id):
+                        if let app = viewModel.app(for: id) {
+                            AppIconView(app: app, iconSize: gridSettings.iconSize, fontSize: gridSettings.appNameFontSize)
+                        }
+                    case .folder(let folder):
+                        FolderIconPlaceholderView(folder: folder, iconSize: gridSettings.iconSize, fontSize: gridSettings.appNameFontSize)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: availableHeight, alignment: .top)
     }
 
     // MARK: - Pagination helpers
@@ -161,44 +226,126 @@ struct LaunchpadView: View {
         guard totalPages > 1 else { return }
 
         let oldPage = currentPage
+        var targetPage = currentPage
+        var isAtEdge = false
 
-        if deltaY < 0, currentPage < totalPages - 1 {
-            currentPage += 1
-        } else if deltaY > 0, currentPage > 0 {
-            currentPage -= 1
+        if deltaY < 0 {
+            // Scroll down = next page
+            if currentPage < totalPages - 1 {
+                targetPage = currentPage + 1
+            } else {
+                // Already at last page - show bounce effect
+                isAtEdge = true
+            }
+        } else if deltaY > 0 {
+            // Scroll up = previous page
+            if currentPage > 0 {
+                targetPage = currentPage - 1
+            } else {
+                // Already at first page - show bounce effect
+                isAtEdge = true
+            }
         }
 
-        if currentPage != oldPage {
-            print("Launchpad currentPage =", currentPage, "/", totalPages)
+        if isAtEdge {
+            // Bounce effect at edge: small offset then spring back
+            let bounceDistance: CGFloat = 30
+            let bounceDirection: CGFloat = deltaY < 0 ? -1 : 1
+            
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                dragOffset = bounceDistance * bounceDirection
+            }
+            
+            // Spring back after a short delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                    dragOffset = 0
+                }
+            }
+            return
         }
+
+        guard targetPage != oldPage else { return }
+
+        // Use explicit animation to ensure smooth transition
+        // Update all related states together within animation block
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+            currentPage = targetPage
+            // Ensure offsets are reset for clean transition
+            if dragOffset != 0 {
+                dragOffset = 0
+            }
+            if pageOffset != 0 {
+                pageOffset = 0
+            }
+        }
+        
+        print("Launchpad scroll to page =", targetPage, "/", totalPages)
     }
 
-    private func handleSwipe(direction: SwipePagingCaptureView.SwipeDirection, totalPages: Int) {
-        // 简单节流，避免一次拖拽触发多次翻页
-        let now = Date()
-        guard now.timeIntervalSince(lastSwipeTime) > 0.3 else { return }
-        lastSwipeTime = now
-
-        guard totalPages > 1 else { return }
-
-        let oldPage = currentPage
-
-        switch direction {
-        case .left:
-            // 向左轻扫 = 下一页
-            if currentPage < totalPages - 1 {
-                currentPage += 1
+    private func handleDragEnd(direction: SwipePagingCaptureView.SwipeDirection?, totalPages: Int, pageWidth: CGFloat) {
+        guard totalPages > 1 else {
+            // Reset offset with animation
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                dragOffset = 0
+                pageOffset = 0
             }
-        case .right:
-            // 向右轻扫 = 上一页
-            if currentPage > 0 {
-                currentPage -= 1
+            isDragging = false
+            return
+        }
+
+        var shouldChangePage = false
+        var targetPage = currentPage
+
+        if let direction = direction {
+            switch direction {
+            case .left:
+                // Swipe left = next page
+                if currentPage < totalPages - 1 {
+                    targetPage = currentPage + 1
+                    shouldChangePage = true
+                }
+            case .right:
+                // Swipe right = previous page
+                if currentPage > 0 {
+                    targetPage = currentPage - 1
+                    shouldChangePage = true
+                }
             }
         }
 
-        if currentPage != oldPage {
-            print("Launchpad swipe to page =", currentPage, "/", totalPages)
+        if shouldChangePage {
+            // Change page: maintain visual continuity during transition
+            // Current offset: -(currentPage * pageWidth) + dragOffset
+            // Target offset: -(targetPage * pageWidth) + 0
+            // We need to smoothly transition from current to target
+            
+            let oldPage = currentPage
+            let currentOffset = -(CGFloat(oldPage) * pageWidth) + dragOffset
+            let targetOffset = -(CGFloat(targetPage) * pageWidth)
+            
+            // Set pageOffset to maintain current visual position
+            pageOffset = currentOffset - targetOffset
+            
+            // Update currentPage
+            currentPage = targetPage
+            print("Launchpad drag to page =", currentPage, "/", totalPages)
+            
+            // Animate both dragOffset and pageOffset to 0
+            // This will smoothly transition from currentOffset to targetOffset
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                dragOffset = 0
+                pageOffset = 0
+            }
+        } else {
+            // Reset to current page with smooth bounce-back animation
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                dragOffset = 0
+                pageOffset = 0
+            }
         }
+
+        isDragging = false
     }
 
     private func paginate(items: [LaunchpadItem], itemsPerPage: Int) -> [[LaunchpadItem]] {

@@ -155,6 +155,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             
+            // 通知 LaunchpadView 重置动画状态（避免重新打开时动画异常）
+            NotificationCenter.default.post(name: NSNotification.Name("ResetLaunchpadView"), object: nil)
+            
             // 窗口显示后，立即再次强制确保全屏
             if let screen = NSScreen.main {
                 window.setFrame(screen.frame, display: true, animate: false)
